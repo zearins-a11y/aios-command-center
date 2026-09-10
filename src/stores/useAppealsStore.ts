@@ -16,6 +16,7 @@ import {
   APPEAL_DECISION_LABELS,
 } from '../utils/appealsProcess';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { loadFromLocal, saveToLocal } from '../lib/useLocalPersistence';
 import type { Appeal as DbAppeal } from '../lib/types';
 
 interface AppealsStore {
@@ -73,6 +74,10 @@ interface AppealsStore {
   // Supabase integration
   loadFromSupabase: () => Promise<void>;
   syncToSupabase: () => Promise<void>;
+
+  // Local persistence
+  initialize: () => Promise<void>;
+  persistToLocal: () => Promise<void>;
 }
 
 export const useAppealsStore = create<AppealsStore>((set, get) => ({
@@ -258,6 +263,9 @@ export const useAppealsStore = create<AppealsStore>((set, get) => ({
     set((state) => ({
       appeals: [appeal, ...state.appeals],
     }));
+
+    // Persist to IndexedDB
+    saveToLocal('appeals', get().appeals);
   },
 
   withdrawAppeal: (appealId, withdrawnBy) => {
@@ -280,6 +288,7 @@ export const useAppealsStore = create<AppealsStore>((set, get) => ({
           : appeal
       ),
     }));
+    saveToLocal('appeals', get().appeals);
   },
 
   assignReviewer: (appealId, reviewerId, reviewerName) => {
@@ -303,6 +312,7 @@ export const useAppealsStore = create<AppealsStore>((set, get) => ({
           : appeal
       ),
     }));
+    saveToLocal('appeals', get().appeals);
   },
 
   startReview: (appealId, reviewerId) => {
@@ -326,6 +336,7 @@ export const useAppealsStore = create<AppealsStore>((set, get) => ({
           : appeal
       ),
     }));
+    saveToLocal('appeals', get().appeals);
   },
 
   decideAppeal: (appealId, decision, reviewerNotes) => {
@@ -357,6 +368,7 @@ export const useAppealsStore = create<AppealsStore>((set, get) => ({
           : appeal
       ),
     }));
+    saveToLocal('appeals', get().appeals);
   },
 
   addNote: (appealId, note, actor) => {
@@ -378,6 +390,7 @@ export const useAppealsStore = create<AppealsStore>((set, get) => ({
           : appeal
       ),
     }));
+    saveToLocal('appeals', get().appeals);
   },
 
   escalatePriority: (appealId) => {
@@ -400,6 +413,7 @@ export const useAppealsStore = create<AppealsStore>((set, get) => ({
           : appeal
       ),
     }));
+    saveToLocal('appeals', get().appeals);
   },
 
   updateConfig: (updates) => {
@@ -515,6 +529,44 @@ export const useAppealsStore = create<AppealsStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to sync appeals to Supabase:', error);
     }
+  },
+
+  initialize: async () => {
+    try {
+      const localAppeals = await loadFromLocal<DbAppeal>('appeals');
+      if (localAppeals.length > 0) {
+        const appeals = localAppeals.map((db: DbAppeal) => ({
+          id: db.id,
+          approvalItemId: db.approval_item_id || '',
+          approvalItemTitle: db.approval_item_title || '',
+          status: db.status as AppealStatus,
+          submittedAt: new Date(db.submitted_at),
+          reviewedAt: null,
+          decidedAt: null,
+          expiresAt: null,
+          submittedBy: '',
+          originalReviewerId: undefined,
+          assignedReviewerId: db.assigned_reviewer_id || null,
+          assignedReviewerName: db.assigned_reviewer_name || null,
+          grounds: (db.grounds || 'other') as Appeal['grounds'],
+          justification: db.justification || '',
+          evidence: [],
+          reviewerNotes: '',
+          decision: null,
+          timeline: [],
+          priority: (db.priority || 'normal') as Appeal['priority'],
+          slaDeadlineHours: db.sla_deadline_hours || 48,
+          reminderSent: false,
+        }));
+        set({ appeals });
+      }
+    } catch (error) {
+      console.error('Failed to initialize appeals from local storage:', error);
+    }
+  },
+
+  persistToLocal: async () => {
+    await saveToLocal('appeals', get().appeals);
   },
 }));
 

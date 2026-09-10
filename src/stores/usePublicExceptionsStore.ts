@@ -14,6 +14,7 @@ import {
   getTimeUntilExpiration,
 } from '../utils/publicExceptions';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { loadFromLocal, saveToLocal } from '../lib/useLocalPersistence';
 
 interface PublicExceptionsStore {
   // Data
@@ -80,6 +81,10 @@ interface PublicExceptionsStore {
   // Supabase integration
   loadFromSupabase: () => Promise<void>;
   syncToSupabase: () => Promise<void>;
+
+  // Local persistence
+  initialize: () => Promise<void>;
+  persistToLocal: () => Promise<void>;
 }
 
 export const usePublicExceptionsStore = create<PublicExceptionsStore>((set, get) => ({
@@ -476,6 +481,53 @@ export const usePublicExceptionsStore = create<PublicExceptionsStore>((set, get)
     } catch (error) {
       console.error('Failed to sync exceptions to Supabase:', error);
     }
+  },
+
+  initialize: async () => {
+    try {
+      const local = await loadFromLocal<any>('exceptions');
+      if (local.length > 0) {
+        const exceptions = local.map((db: any) => ({
+          id: db.id,
+          referenceId: db.reference_id || '',
+          referenceTitle: db.reference_title || '',
+          referenceType: (db.reference_type || 'approval') as PublicException['referenceType'],
+          type: (db.type || 'policy_override') as ExceptionType,
+          status: (db.status || 'pending') as ExceptionStatus,
+          severity: (db.severity || 'low') as ExceptionSeverity,
+          title: db.title || '',
+          description: db.description || '',
+          justification: db.justification || '',
+          businessImpact: db.business_impact || '',
+          riskAssessment: db.risk_assessment || '',
+          requestedBy: db.requested_by || '',
+          requestedByRole: db.requested_by_role || '',
+          requestedAt: new Date(db.requested_at),
+          approvedBy: db.approved_by || null,
+          approvedAt: db.approved_at ? new Date(db.approved_at) : null,
+          approvalNotes: db.approval_notes || '',
+          conditions: db.conditions || [],
+          monitoringRequired: db.monitoring_required || false,
+          expirationDate: db.expiration_date ? new Date(db.expiration_date) : null,
+          isPublic: db.is_public || false,
+          stakeholderNotification: db.stakeholder_notification || false,
+          stakeholderNotificationDate: db.stakeholder_notification_date ? new Date(db.stakeholder_notification_date) : null,
+          impactMetrics: db.impact_metrics || { affectedContent: 0, affectedTime: 0, reputationRisk: 'none' },
+          resolvedAt: db.resolved_at ? new Date(db.resolved_at) : null,
+          resolutionNotes: db.resolution_notes || '',
+          lessonsLearned: db.lessons_learned || '',
+          tags: db.tags || [],
+          relatedExceptions: db.related_exceptions || [],
+        }));
+        set({ exceptions });
+      }
+    } catch (error) {
+      console.error('Failed to initialize exceptions from local storage:', error);
+    }
+  },
+
+  persistToLocal: async () => {
+    await saveToLocal('exceptions', get().exceptions);
   },
 }));
 

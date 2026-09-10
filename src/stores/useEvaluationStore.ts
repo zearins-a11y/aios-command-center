@@ -9,6 +9,7 @@ import {
   getPriorityFromScore,
 } from '../types/agentEvaluation';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { loadFromLocal, saveToLocal } from '../lib/useLocalPersistence';
 
 // Initial seed data - placeholder evaluations from what we know
 // Will be populated by AGENCY_AGENTS_EVALUATION.md report when ready
@@ -187,13 +188,17 @@ interface EvaluationStore {
   // Supabase integration
   loadFromSupabase: () => Promise<void>;
   syncToSupabase: () => Promise<void>;
+
+  // Local IndexedDB persistence
+  initialize: () => Promise<void>;
+  persistToLocal: () => Promise<void>;
 }
 
 export const useEvaluationStore = create<EvaluationStore>((set, get) => ({
   evaluations: seedEvaluations,
   filters: {},
 
-  addEvaluation: (evaluation) =>
+  addEvaluation: (evaluation) => {
     set((state) => ({
       evaluations: [
         ...state.evaluations,
@@ -203,19 +208,25 @@ export const useEvaluationStore = create<EvaluationStore>((set, get) => ({
           evaluatedAt: new Date(),
         },
       ],
-    })),
+    }));
+    get().persistToLocal();
+  },
 
-  updateEvaluation: (id, updates) =>
+  updateEvaluation: (id, updates) => {
     set((state) => ({
       evaluations: state.evaluations.map((e) =>
         e.id === id ? { ...e, ...updates, evaluatedAt: new Date() } : e
       ),
-    })),
+    }));
+    get().persistToLocal();
+  },
 
-  removeEvaluation: (id) =>
+  removeEvaluation: (id) => {
     set((state) => ({
       evaluations: state.evaluations.filter((e) => e.id !== id),
-    })),
+    }));
+    get().persistToLocal();
+  },
 
   importEvaluations: (newEvaluations) =>
     set((state) => ({
@@ -319,6 +330,29 @@ export const useEvaluationStore = create<EvaluationStore>((set, get) => ({
       }
     } catch (error) {
       console.error('Failed to sync evaluations to Supabase:', error);
+    }
+  },
+
+  initialize: async () => {
+    try {
+      const local = await loadFromLocal<any>('evaluations');
+      if (local && local.length > 0) {
+        const evals = local.map((item: any) => ({
+          ...item,
+          evaluatedAt: new Date(item.evaluatedAt),
+        }));
+        set({ evaluations: evals });
+      }
+    } catch (error) {
+      console.error('Failed to initialize from local storage:', error);
+    }
+  },
+
+  persistToLocal: async () => {
+    try {
+      await saveToLocal('evaluations', get().evaluations);
+    } catch (error) {
+      console.error('Failed to persist to local storage:', error);
     }
   },
 }));

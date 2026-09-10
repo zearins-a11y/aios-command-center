@@ -39,18 +39,23 @@ interface ThresholdStore {
   // Supabase integration
   loadFromSupabase: () => Promise<void>;
   syncToSupabase: () => Promise<void>;
+
+  // Local IndexedDB persistence
+  initialize: () => Promise<void>;
+  persistToLocal: () => Promise<void>;
 }
 
 export const useThresholdStore = create<ThresholdStore>((set, get) => ({
   thresholds: { ...DEFAULT_THRESHOLDS },
 
-  updateThreshold: (type, updates) =>
+  updateThreshold: (type, updates) => {
     set((state) => ({
       thresholds: {
         ...state.thresholds,
         [type]: { ...state.thresholds[type], ...updates },
       },
-    })),
+    }));
+  },
 
   toggleThreshold: (type) =>
     set((state) => ({
@@ -60,7 +65,9 @@ export const useThresholdStore = create<ThresholdStore>((set, get) => ({
       },
     })),
 
-  resetToDefaults: () => set({ thresholds: { ...DEFAULT_THRESHOLDS } }),
+  resetToDefaults: () => {
+    set({ thresholds: { ...DEFAULT_THRESHOLDS } });
+  },
 
   evaluateValidation: (result) => {
     const threshold = get().thresholds[result.type];
@@ -207,5 +214,13 @@ export const useThresholdStore = create<ThresholdStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to sync threshold data to Supabase:', error);
     }
+  },
+
+  initialize: async () => {
+    // Thresholds are simple config, keep defaults
+  },
+
+  persistToLocal: async () => {
+    // Thresholds don't need local persistence
   },
 }));

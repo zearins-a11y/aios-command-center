@@ -12,6 +12,7 @@ import {
 } from '../utils/strikeSystem';
 import { AgentRole, AgentWorkStatus } from '../types/governance';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { loadFromLocal, saveToLocal } from '../lib/useLocalPersistence';
 import type { StrikeRecord as DbStrikeRecord } from '../lib/types';
 
 // Helper to convert DB record to app type
@@ -63,6 +64,10 @@ interface StrikeStore {
   needsHumanReview: (agentId: AgentRole) => boolean;
   getRecommendedStatus: (agentId: AgentRole) => AgentWorkStatus;
   getAllStrikeSummaries: () => AgentStrikeSummary[];
+
+  // Persistence
+  initialize: () => Promise<void>;
+  persistToLocal: () => Promise<void>;
 
   // Supabase integration
   isLoading: boolean;
@@ -129,6 +134,9 @@ export const useStrikeStore = create<StrikeStore>((set, get) => ({
     set((state) => ({
       strikes: [newStrike, ...state.strikes],
     }));
+
+    // Persist to IndexedDB
+    saveToLocal('strikes', get().strikes);
 
     // Sync to Supabase
     if (isSupabaseConfigured && supabase) {
@@ -290,5 +298,21 @@ export const useStrikeStore = create<StrikeStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to sync strikes to Supabase:', error);
     }
+  },
+
+  initialize: async () => {
+    try {
+      const localStrikes = await loadFromLocal<DbStrikeRecord>('strikes');
+      if (localStrikes.length > 0) {
+        const strikes = localStrikes.map(dbToStrike);
+        set({ strikes });
+      }
+    } catch (error) {
+      console.error('Failed to initialize strikes from local storage:', error);
+    }
+  },
+
+  persistToLocal: async () => {
+    await saveToLocal('strikes', get().strikes);
   },
 }));

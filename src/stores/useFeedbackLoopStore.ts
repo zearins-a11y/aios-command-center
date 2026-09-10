@@ -18,6 +18,7 @@ import {
 } from '../utils/feedbackLoop';
 import { AgentRole } from '../types/governance';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { loadFromLocal, saveToLocal } from '../lib/useLocalPersistence';
 import type { FeedbackSignal as DbFeedbackSignal } from '../lib/types';
 
 interface FeedbackLoopStore {
@@ -73,6 +74,10 @@ interface FeedbackLoopStore {
     rejectionRate: number;
     avgResponseTime: number;
   };
+
+  // Local persistence
+  initialize: () => Promise<void>;
+  persistToLocal: () => Promise<void>;
 }
 
 export const useFeedbackLoopStore = create<FeedbackLoopStore>((set, get) => ({
@@ -206,6 +211,7 @@ export const useFeedbackLoopStore = create<FeedbackLoopStore>((set, get) => ({
     set((state) => ({
       feedbackSignals: [signal, ...state.feedbackSignals],
     }));
+    saveToLocal('feedback', get().feedbackSignals);
   },
 
   acknowledgeFeedback: (feedbackId) => {
@@ -216,6 +222,7 @@ export const useFeedbackLoopStore = create<FeedbackLoopStore>((set, get) => ({
           : fb
       ),
     }));
+    saveToLocal('feedback', get().feedbackSignals);
   },
 
   updateConfig: (updates) => {
@@ -373,6 +380,29 @@ export const useFeedbackLoopStore = create<FeedbackLoopStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to sync feedback to Supabase:', error);
     }
+  },
+
+  // Local persistence
+  initialize: async () => {
+    try {
+      const local = await loadFromLocal<FeedbackSignal>('feedback');
+      if (local.length > 0) {
+        const signals = local.map((item) => ({
+          ...item,
+          submittedAt: new Date(item.submittedAt),
+          reviewedAt: new Date(item.reviewedAt),
+          publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
+          agentAcknowledgedAt: item.agentAcknowledgedAt ? new Date(item.agentAcknowledgedAt) : null,
+        }));
+        set({ feedbackSignals: signals });
+      }
+    } catch (error) {
+      console.error('Failed to initialize feedback from IndexedDB:', error);
+    }
+  },
+
+  persistToLocal: async () => {
+    await saveToLocal('feedback', get().feedbackSignals);
   },
 }));
 

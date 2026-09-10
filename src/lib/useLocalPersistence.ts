@@ -83,3 +83,19 @@ export async function loadFromLocal<T>(storeKey: string): Promise<T[]> {
     return []
   }
 }
+
+/**
+ * Salva dados de um store no IndexedDB
+ */
+export async function saveToLocal<T extends { id: string }>(
+  storeKey: string,
+  data: T[]
+): Promise<void> {
+  try {
+    const storeName = STORE_NAMES[storeKey] || storeKey
+    const { setLocalData } = await import('./localStorage')
+    await setLocalData(storeName, data)
+  } catch (error) {
+    console.error(`Failed to save ${storeKey} to IndexedDB:`, error)
+  }
+}

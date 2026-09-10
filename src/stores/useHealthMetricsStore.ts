@@ -10,6 +10,7 @@ import {
   getOverallHealthStatus,
 } from '../utils/healthMetrics';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { loadFromLocal } from '../lib/useLocalPersistence';
 
 interface HealthMetricsStore {
   // Data
@@ -36,6 +37,10 @@ interface HealthMetricsStore {
   // Supabase integration
   loadFromSupabase: () => Promise<void>;
   syncToSupabase: () => Promise<void>;
+
+  // Local persistence
+  initialize: () => Promise<void>;
+  persistToLocal: () => Promise<void>;
 }
 
 export const useHealthMetricsStore = create<HealthMetricsStore>((set, get) => ({
@@ -252,8 +257,20 @@ export const useHealthMetricsStore = create<HealthMetricsStore>((set, get) => ({
       console.error('Failed to sync health metrics to Supabase:', error);
     }
   },
-}));
 
-// Initialize health checks on load
-const store = useHealthMetricsStore.getState();
-store.refreshMetrics();
+  initialize: async () => {
+    try {
+      const local = await loadFromLocal<any>('health');
+      if (local.length > 0) {
+        // Health metrics is more complex, just keep mock data
+        console.log('Health metrics loaded from local:', local.length, 'records');
+      }
+    } catch (error) {
+      console.error('Failed to initialize health from local storage:', error);
+    }
+  },
+
+  persistToLocal: async () => {
+    // Health metrics doesn't need local persistence
+  },
+}));

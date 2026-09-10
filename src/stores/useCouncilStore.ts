@@ -16,6 +16,7 @@ import {
   suggestMembersForCase,
 } from '../utils/councilConsultive';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { loadFromLocal, saveToLocal } from '../lib/useLocalPersistence';
 import type { CouncilMember as DbCouncilMember, CouncilCase as DbCouncilCase } from '../lib/types';
 
 interface CouncilStore {
@@ -85,6 +86,10 @@ interface CouncilStore {
   // Supabase integration
   loadFromSupabase: () => Promise<void>;
   syncToSupabase: () => Promise<void>;
+
+  // Local persistence
+  initialize: () => Promise<void>;
+  persistToLocal: () => Promise<void>;
 }
 
 export const useCouncilStore = create<CouncilStore>((set, get) => ({
@@ -327,6 +332,7 @@ export const useCouncilStore = create<CouncilStore>((set, get) => ({
     set((state) => ({
       members: [...state.members, newMember],
     }));
+    get().persistToLocal();
   },
 
   updateMember: (memberId, updates) => {
@@ -335,6 +341,7 @@ export const useCouncilStore = create<CouncilStore>((set, get) => ({
         m.id === memberId ? { ...m, ...updates } : m
       ),
     }));
+    get().persistToLocal();
   },
 
   deactivateMember: (memberId) => {
@@ -343,6 +350,7 @@ export const useCouncilStore = create<CouncilStore>((set, get) => ({
         m.id === memberId ? { ...m, status: 'inactive' as const } : m
       ),
     }));
+    get().persistToLocal();
   },
 
   reactivateMember: (memberId) => {
@@ -351,6 +359,7 @@ export const useCouncilStore = create<CouncilStore>((set, get) => ({
         m.id === memberId ? { ...m, status: 'active' as const, availability: 'available' as const } : m
       ),
     }));
+    get().persistToLocal();
   },
 
   createCase: (referenceId, referenceTitle, referenceType, summary, context, questions, category, createdBy, priority = 'normal') => {
@@ -360,6 +369,7 @@ export const useCouncilStore = create<CouncilStore>((set, get) => ({
     set((state) => ({
       cases: [newCase, ...state.cases],
     }));
+    get().persistToLocal();
   },
 
   assignCase: (caseId, memberIds) => {
@@ -375,6 +385,7 @@ export const useCouncilStore = create<CouncilStore>((set, get) => ({
           : c
       ),
     }));
+    get().persistToLocal();
   },
 
   submitOpinion: (caseId, memberId, memberName, position, opinion, reasoning, confidence, concerns, suggestions) => {
@@ -412,6 +423,7 @@ export const useCouncilStore = create<CouncilStore>((set, get) => ({
 
       return { cases: updatedCases };
     });
+    get().persistToLocal();
   },
 
   closeCase: (caseId) => {
@@ -422,6 +434,7 @@ export const useCouncilStore = create<CouncilStore>((set, get) => ({
           : c
       ),
     }));
+    get().persistToLocal();
   },
 
   updateConfig: (updates) => {
@@ -619,6 +632,28 @@ export const useCouncilStore = create<CouncilStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to sync council data to Supabase:', error);
     }
+  },
+
+  // Local persistence
+  initialize: async () => {
+    try {
+      const [localMembers, localCases] = await Promise.all([
+        loadFromLocal<any>('councilMembers'),
+        loadFromLocal<any>('councilCases'),
+      ]);
+      if (localMembers.length > 0) set({ members: localMembers });
+      if (localCases.length > 0) set({ cases: localCases });
+    } catch (error) {
+      console.error('Failed to initialize council store from local storage:', error);
+    }
+  },
+
+  persistToLocal: async () => {
+    const { members, cases } = get();
+    await Promise.all([
+      saveToLocal('councilMembers', members),
+      saveToLocal('councilCases', cases),
+    ]);
   },
 }));
 
