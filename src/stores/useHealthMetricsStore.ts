@@ -9,6 +9,7 @@ import {
   getHealthChecks,
   getOverallHealthStatus,
 } from '../utils/healthMetrics';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface HealthMetricsStore {
   // Data
@@ -31,6 +32,10 @@ interface HealthMetricsStore {
   getOverallScore: () => number;
   getOverallStatus: () => ReturnType<typeof getOverallHealthStatus>;
   getFilteredTrends: (days: number) => HealthTrend[];
+
+  // Supabase integration
+  loadFromSupabase: () => Promise<void>;
+  syncToSupabase: () => Promise<void>;
 }
 
 export const useHealthMetricsStore = create<HealthMetricsStore>((set, get) => ({
@@ -201,6 +206,51 @@ export const useHealthMetricsStore = create<HealthMetricsStore>((set, get) => ({
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
     return trends.filter((t) => t.date >= cutoff);
+  },
+
+  loadFromSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('health_metrics')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(30);
+
+      if (!error && data && data.length > 0) {
+        const loadedTrends: HealthTrend[] = data.map((db: any) => ({
+          date: new Date(db.date),
+          score: db.score || 0,
+          metrics: db.metrics || {},
+        }));
+        set({ trends: loadedTrends });
+      }
+    } catch (error) {
+      console.error('Failed to load health metrics from Supabase:', error);
+    }
+  },
+
+  syncToSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const { metrics } = get();
+    try {
+      // Sync current metrics
+      const score = calculateHealthScore(metrics);
+      const currentMetrics: Record<string, number> = {};
+      metrics.forEach((m) => {
+        currentMetrics[m.id] = m.value;
+      });
+
+      await supabase.from('health_metrics').insert({
+        date: new Date().toISOString(),
+        score,
+        metrics: currentMetrics,
+      });
+    } catch (error) {
+      console.error('Failed to sync health metrics to Supabase:', error);
+    }
   },
 }));
 

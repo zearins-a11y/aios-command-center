@@ -15,6 +15,8 @@ import {
   createCouncilCase,
   suggestMembersForCase,
 } from '../utils/councilConsultive';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import type { CouncilMember as DbCouncilMember, CouncilCase as DbCouncilCase } from '../lib/types';
 
 interface CouncilStore {
   // Data
@@ -79,6 +81,10 @@ interface CouncilStore {
     pendingCases: number;
     avgResolutionTime: number;
   };
+
+  // Supabase integration
+  loadFromSupabase: () => Promise<void>;
+  syncToSupabase: () => Promise<void>;
 }
 
 export const useCouncilStore = create<CouncilStore>((set, get) => ({
@@ -490,6 +496,129 @@ export const useCouncilStore = create<CouncilStore>((set, get) => ({
       pendingCases: pendingCases.length,
       avgResolutionTime,
     };
+  },
+
+  // Supabase integration
+  loadFromSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    try {
+      // Load council members
+      const { data: membersData, error: membersError } = await supabase
+        .from('council_members')
+        .select('*')
+        .eq('status', 'active');
+
+      if (!membersError && membersData) {
+        const loadedMembers: CouncilMember[] = membersData.map((db: DbCouncilMember) => ({
+          id: db.id,
+          name: db.name,
+          title: db.title || '',
+          organization: db.organization || '',
+          email: db.email || '',
+          role: db.role as CouncilMember['role'],
+          specialties: (db.specialties || []) as CouncilMember['specialties'],
+          status: db.status as CouncilMember['status'],
+          joinedAt: new Date(db.joined_at),
+          lastActiveAt: new Date(),
+          casesReviewed: 0,
+          opinionsIssued: 0,
+          avatar: undefined,
+          bio: '',
+          availability: 'available',
+          maxCasesPerMonth: db.max_cases_per_month || 5,
+          currentCasesCount: 0,
+        }));
+        if (loadedMembers.length > 0) {
+          set({ members: loadedMembers });
+        }
+      }
+
+      // Load council cases
+      const { data: casesData, error: casesError } = await supabase
+        .from('council_cases')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!casesError && casesData) {
+        const loadedCases: CouncilCase[] = casesData.map((db: DbCouncilCase) => ({
+          id: db.id,
+          referenceId: db.reference_id || '',
+          referenceTitle: db.reference_title || '',
+          referenceType: db.reference_type as CouncilCase['referenceType'] || 'approval',
+          status: (db.status?.replace('_', '') as CouncilCaseStatus) || 'pending_assignment',
+          priority: db.priority as CouncilCase['priority'] || 'normal',
+          category: (db.category || []) as CouncilSpecialty[],
+          assignedTo: db.assigned_to || [],
+          assignedAt: null,
+          deadline: db.deadline ? new Date(db.deadline) : null,
+          summary: db.summary || '',
+          context: db.context || '',
+          questions: db.questions || [],
+          relevantDocuments: [],
+          opinions: [],
+          finalOpinion: db.recommendation || null,
+          recommendation: (db.recommendation as CouncilCase['recommendation']) || 'no_action',
+          confidence: db.confidence || 0,
+          createdAt: new Date(db.created_at),
+          closedAt: null,
+          createdBy: db.created_by || '',
+          tags: [],
+          requiresUnanimousDecision: false,
+          votingDeadline: null,
+        }));
+        if (loadedCases.length > 0) {
+          set({ cases: loadedCases });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load council data from Supabase:', error);
+    }
+  },
+
+  syncToSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const { members, cases } = get();
+    try {
+      // Sync members
+      for (const member of members) {
+        await supabase.from('council_members').upsert({
+          id: member.id,
+          name: member.name,
+          title: member.title,
+          organization: member.organization,
+          email: member.email,
+          role: member.role,
+          specialties: member.specialties,
+          status: member.status,
+          max_cases_per_month: member.maxCasesPerMonth,
+        });
+      }
+
+      // Sync cases
+      for (const c of cases) {
+        await supabase.from('council_cases').upsert({
+          id: c.id,
+          reference_id: c.referenceId,
+          reference_title: c.referenceTitle,
+          reference_type: c.referenceType,
+          status: c.status,
+          priority: c.priority,
+          category: c.category,
+          assigned_to: c.assignedTo,
+          summary: c.summary,
+          context: c.context,
+          questions: c.questions,
+          recommendation: c.recommendation,
+          confidence: c.confidence,
+          created_by: c.createdBy,
+          deadline: c.deadline?.toISOString(),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to sync council data to Supabase:', error);
+    }
   },
 }));
 

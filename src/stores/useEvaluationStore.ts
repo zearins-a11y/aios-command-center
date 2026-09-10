@@ -8,6 +8,7 @@ import {
   calculateOverallScore,
   getPriorityFromScore,
 } from '../types/agentEvaluation';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 // Initial seed data - placeholder evaluations from what we know
 // Will be populated by AGENCY_AGENTS_EVALUATION.md report when ready
@@ -182,6 +183,10 @@ interface EvaluationStore {
   getEvaluationById: (id: string) => AgentEvaluation | undefined;
   getOverallScore: (id: string) => number;
   getPriority: (id: string) => 'critical' | 'high' | 'medium' | 'low';
+
+  // Supabase integration
+  loadFromSupabase: () => Promise<void>;
+  syncToSupabase: () => Promise<void>;
 }
 
 export const useEvaluationStore = create<EvaluationStore>((set, get) => ({
@@ -248,5 +253,72 @@ export const useEvaluationStore = create<EvaluationStore>((set, get) => ({
     const evaluation = get().evaluations.find((e) => e.id === id);
     if (!evaluation) return 'low';
     return getPriorityFromScore(calculateOverallScore(evaluation));
+  },
+
+  loadFromSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('agent_evaluations')
+        .select('*')
+        .order('evaluated_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const loadedEvaluations: AgentEvaluation[] = data.map((db) => ({
+          id: db.id,
+          name: db.name || '',
+          source: db.source || 'aios',
+          sourcePath: db.source_path || '',
+          category: db.category || 'general',
+          description: db.description || '',
+          capabilities: db.capabilities || [],
+          fitWithAios: db.fit_with_aios || 0,
+          fitWithXquads: db.fit_with_xquads || 0,
+          reusability: db.reusability || 0,
+          businessValue: db.business_value || 0,
+          maintenanceCost: db.maintenance_cost || 0,
+          status: db.status || 'tbd',
+          recommendation: db.recommendation || 'evaluate',
+          reasoning: db.reasoning || '',
+          evaluatedAt: new Date(db.evaluated_at),
+          evaluatedBy: db.evaluated_by || 'system',
+        }));
+        set({ evaluations: loadedEvaluations });
+      }
+    } catch (error) {
+      console.error('Failed to load evaluations from Supabase:', error);
+    }
+  },
+
+  syncToSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const { evaluations } = get();
+    try {
+      for (const evaluation of evaluations) {
+        await supabase.from('agent_evaluations').upsert({
+          id: evaluation.id,
+          name: evaluation.name,
+          source: evaluation.source,
+          source_path: evaluation.sourcePath,
+          category: evaluation.category,
+          description: evaluation.description,
+          capabilities: evaluation.capabilities,
+          fit_with_aios: evaluation.fitWithAios,
+          fit_with_xquads: evaluation.fitWithXquads,
+          reusability: evaluation.reusability,
+          business_value: evaluation.businessValue,
+          maintenance_cost: evaluation.maintenanceCost,
+          status: evaluation.status,
+          recommendation: evaluation.recommendation,
+          reasoning: evaluation.reasoning,
+          evaluated_at: evaluation.evaluatedAt.toISOString(),
+          evaluated_by: evaluation.evaluatedBy,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to sync evaluations to Supabase:', error);
+    }
   },
 }));

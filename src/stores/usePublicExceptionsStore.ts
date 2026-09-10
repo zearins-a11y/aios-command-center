@@ -13,6 +13,7 @@ import {
   getExceptionAge,
   getTimeUntilExpiration,
 } from '../utils/publicExceptions';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface PublicExceptionsStore {
   // Data
@@ -75,6 +76,10 @@ interface PublicExceptionsStore {
     avgResolutionTime: number;
     highRiskCount: number;
   };
+
+  // Supabase integration
+  loadFromSupabase: () => Promise<void>;
+  syncToSupabase: () => Promise<void>;
 }
 
 export const usePublicExceptionsStore = create<PublicExceptionsStore>((set, get) => ({
@@ -378,6 +383,99 @@ export const usePublicExceptionsStore = create<PublicExceptionsStore>((set, get)
       avgResolutionTime,
       highRiskCount: highRisk,
     };
+  },
+
+  loadFromSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('public_exceptions')
+        .select('*')
+        .order('requested_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const loadedExceptions = data.map((db: any) => ({
+          id: db.id,
+          referenceId: db.reference_id || '',
+          referenceTitle: db.reference_title || '',
+          referenceType: (db.reference_type || 'approval') as PublicException['referenceType'],
+          type: (db.type || 'policy_override') as ExceptionType,
+          status: (db.status || 'pending') as ExceptionStatus,
+          severity: (db.severity || 'low') as ExceptionSeverity,
+          title: db.title || '',
+          description: db.description || '',
+          justification: db.justification || '',
+          businessImpact: db.business_impact || '',
+          riskAssessment: db.risk_assessment || '',
+          requestedBy: db.requested_by || '',
+          requestedByRole: db.requested_by_role || '',
+          requestedAt: new Date(db.requested_at),
+          approvedBy: db.approved_by || null,
+          approvedAt: db.approved_at ? new Date(db.approved_at) : null,
+          approvalNotes: db.approval_notes || '',
+          conditions: db.conditions || [],
+          monitoringRequired: db.monitoring_required || false,
+          expirationDate: db.expiration_date ? new Date(db.expiration_date) : null,
+          isPublic: db.is_public || false,
+          stakeholderNotification: db.stakeholder_notification || false,
+          stakeholderNotificationDate: db.stakeholder_notification_date ? new Date(db.stakeholder_notification_date) : null,
+          impactMetrics: db.impact_metrics || { affectedContent: 0, affectedTime: 0, reputationRisk: 'none' },
+          resolvedAt: db.resolved_at ? new Date(db.resolved_at) : null,
+          resolutionNotes: db.resolution_notes || '',
+          lessonsLearned: db.lessons_learned || '',
+          tags: db.tags || [],
+          relatedExceptions: db.related_exceptions || [],
+        }));
+        set({ exceptions: loadedExceptions });
+      }
+    } catch (error) {
+      console.error('Failed to load exceptions from Supabase:', error);
+    }
+  },
+
+  syncToSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const { exceptions } = get();
+    try {
+      for (const exception of exceptions) {
+        await supabase.from('public_exceptions').upsert({
+          id: exception.id,
+          reference_id: exception.referenceId,
+          reference_title: exception.referenceTitle,
+          reference_type: exception.referenceType,
+          type: exception.type,
+          status: exception.status,
+          severity: exception.severity,
+          title: exception.title,
+          description: exception.description,
+          justification: exception.justification,
+          business_impact: exception.businessImpact,
+          risk_assessment: exception.riskAssessment,
+          requested_by: exception.requestedBy,
+          requested_by_role: exception.requestedByRole,
+          requested_at: exception.requestedAt.toISOString(),
+          approved_by: exception.approvedBy,
+          approved_at: exception.approvedAt?.toISOString(),
+          approval_notes: exception.approvalNotes,
+          conditions: exception.conditions,
+          monitoring_required: exception.monitoringRequired,
+          expiration_date: exception.expirationDate?.toISOString(),
+          is_public: exception.isPublic,
+          stakeholder_notification: exception.stakeholderNotification,
+          stakeholder_notification_date: exception.stakeholderNotificationDate?.toISOString(),
+          impact_metrics: exception.impactMetrics,
+          resolved_at: exception.resolvedAt?.toISOString(),
+          resolution_notes: exception.resolutionNotes,
+          lessons_learned: exception.lessonsLearned,
+          tags: exception.tags,
+          related_exceptions: exception.relatedExceptions,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to sync exceptions to Supabase:', error);
+    }
   },
 }));
 
