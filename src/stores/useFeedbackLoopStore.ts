@@ -17,6 +17,8 @@ import {
   getAvailablePatterns,
 } from '../utils/feedbackLoop';
 import { AgentRole } from '../types/governance';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import type { FeedbackSignal as DbFeedbackSignal } from '../lib/types';
 
 interface FeedbackLoopStore {
   // Feedback signals
@@ -302,6 +304,75 @@ export const useFeedbackLoopStore = create<FeedbackLoopStore>((set, get) => ({
       rejectionRate: Math.round((rejected / feedback.length) * 100),
       avgResponseTime,
     };
+  },
+
+  // Supabase integration
+  loadFromSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('feedback_signals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        const signals: FeedbackSignal[] = data.map((db: DbFeedbackSignal) => ({
+          id: db.id,
+          itemId: db.item_id || '',
+          itemTitle: db.item_title || '',
+          itemType: (db.item_type as FeedbackSignal['itemType']) || 'post',
+          decision: (db.decision as FeedbackDecision) || 'approved',
+          submittedAt: new Date(db.created_at),
+          agentId: (db.agent_id || 'aios_dev') as AgentRole,
+          agentName: db.agent_name || '',
+          squadId: db.squad_id || '',
+          reviewerId: db.reviewer_id || '',
+          reviewerName: db.reviewer_name || '',
+          reviewedAt: new Date(db.created_at),
+          pattern: (db.pattern as FeedbackPattern) || 'format_error',
+          patternConfidence: db.pattern_confidence || 0,
+          reason: db.reason || '',
+          wasPublished: db.was_published || false,
+          publishedAt: null,
+          agentAcknowledged: db.agent_acknowledged || false,
+          agentAcknowledgedAt: db.agent_acknowledged_at ? new Date(db.agent_acknowledged_at) : null,
+        }));
+        set({ feedbackSignals: signals.length > 0 ? signals : get().feedbackSignals });
+      }
+    } catch (error) {
+      console.error('Failed to load feedback from Supabase:', error);
+    }
+  },
+
+  syncToSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const { feedbackSignals } = get();
+    try {
+      for (const signal of feedbackSignals) {
+        await supabase.from('feedback_signals').upsert({
+          id: signal.id,
+          item_id: signal.itemId,
+          item_title: signal.itemTitle,
+          item_type: signal.itemType,
+          decision: signal.decision,
+          agent_id: signal.agentId,
+          agent_name: signal.agentName,
+          squad_id: signal.squadId,
+          reviewer_id: signal.reviewerId,
+          reviewer_name: signal.reviewerName,
+          pattern: signal.pattern,
+          pattern_confidence: signal.patternConfidence,
+          reason: signal.reason,
+          was_published: signal.wasPublished,
+          agent_acknowledged: signal.agentAcknowledged,
+          agent_acknowledged_at: signal.agentAcknowledgedAt?.toISOString(),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to sync feedback to Supabase:', error);
+    }
   },
 }));
 

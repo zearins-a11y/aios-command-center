@@ -58,6 +58,8 @@ export interface Appeal {
   priority: 'low' | 'normal' | 'high' | 'urgent'
   sla_deadline_hours: number
   submitted_at: string
+  assigned_reviewer_id: string | null
+  assigned_reviewer_name: string | null
 }
 
 // Agent Types
@@ -106,6 +108,8 @@ export interface FeedbackSignal {
   agent_id: string | null
   agent_name: string | null
   squad_id: string | null
+  reviewer_id: string | null
+  reviewer_name: string | null
   pattern: string | null
   pattern_confidence: number | null
   reason: string | null

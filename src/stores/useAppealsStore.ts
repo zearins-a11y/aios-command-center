@@ -15,6 +15,8 @@ import {
   APPEAL_STATUS_LABELS,
   APPEAL_DECISION_LABELS,
 } from '../utils/appealsProcess';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import type { Appeal as DbAppeal } from '../lib/types';
 
 interface AppealsStore {
   // Appeals data
@@ -67,6 +69,10 @@ interface AppealsStore {
   canSubmitAppeal: (approvalItemId: string, itemStatus: string) => { canAppeal: boolean; reason?: string };
   canUserWithdraw: (appealId: string) => boolean;
   getSlaInfo: (appealId: string) => { status: 'ok' | 'warning' | 'critical' | 'breached'; timeRemaining: string };
+
+  // Supabase integration
+  loadFromSupabase: () => Promise<void>;
+  syncToSupabase: () => Promise<void>;
 }
 
 export const useAppealsStore = create<AppealsStore>((set, get) => ({
@@ -444,6 +450,71 @@ export const useAppealsStore = create<AppealsStore>((set, get) => ({
       status: getSlaStatus(appeal, get().config),
       timeRemaining: getTimeRemaining(appeal.expiresAt),
     };
+  },
+
+  // Supabase integration
+  loadFromSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('appeals')
+        .select('*')
+        .order('submitted_at', { ascending: false });
+
+      if (!error && data) {
+        const appeals = data.map((db: DbAppeal) => ({
+          id: db.id,
+          approvalItemId: db.approval_item_id || '',
+          approvalItemTitle: db.approval_item_title || '',
+          status: db.status as AppealStatus,
+          submittedAt: new Date(db.submitted_at),
+          reviewedAt: null,
+          decidedAt: null,
+          expiresAt: null,
+          submittedBy: '',
+          originalReviewerId: undefined,
+          assignedReviewerId: db.assigned_reviewer_id || null,
+          assignedReviewerName: db.assigned_reviewer_name || null,
+          grounds: (db.grounds || 'other') as Appeal['grounds'],
+          justification: db.justification || '',
+          evidence: [],
+          reviewerNotes: '',
+          decision: null,
+          timeline: [],
+          priority: (db.priority || 'normal') as Appeal['priority'],
+          slaDeadlineHours: db.sla_deadline_hours || 48,
+          reminderSent: false,
+        }));
+        set((state) => ({ appeals: appeals.length > 0 ? appeals : state.appeals }));
+      }
+    } catch (error) {
+      console.error('Failed to load appeals from Supabase:', error);
+    }
+  },
+
+  syncToSupabase: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const { appeals } = get();
+    try {
+      for (const appeal of appeals) {
+        await supabase.from('appeals').upsert({
+          id: appeal.id,
+          approval_item_id: appeal.approvalItemId,
+          approval_item_title: appeal.approvalItemTitle,
+          status: appeal.status,
+          grounds: appeal.grounds,
+          justification: appeal.justification,
+          priority: appeal.priority,
+          sla_deadline_hours: appeal.slaDeadlineHours,
+          assigned_reviewer_id: appeal.assignedReviewerId,
+          assigned_reviewer_name: appeal.assignedReviewerName,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to sync appeals to Supabase:', error);
+    }
   },
 }));
 
