@@ -4,6 +4,9 @@ import { ToastContainer } from './components/ui';
 import { useStore } from './stores/useStore';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import AcceptInvite from './pages/AcceptInvite';
+import TeamManagement from './pages/admin/TeamManagement';
+import AuditLogs from './pages/admin/AuditLogs';
 
 function App() {
   const { currentPage, setCurrentPage } = useStore();
@@ -11,13 +14,18 @@ function App() {
 
   // Check if we're on an auth page based on URL hash
   const hash = window.location.hash.replace('#', '');
-  const isAuthPage = hash === 'login' || hash === 'signup';
+  const isAuthPage = hash === 'login' || hash === 'signup' || hash === 'accept-invite';
 
   // Auth pages don't need authentication - render directly
   if (isAuthPage) {
     if (hash === 'login') return <Login />;
     if (hash === 'signup') return <Signup />;
+    if (hash === 'accept-invite') return <AcceptInvite />;
   }
+
+  // Admin pages
+  if (hash === 'team-management') return <TeamManagement />;
+  if (hash === 'audit-logs') return <AuditLogs />;
 
   // Sync URL hash with current page (on first load and hash change)
   useEffect(() => {
