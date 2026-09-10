@@ -28,7 +28,7 @@ export const supabase = isSupabaseConfigured
 export const checkConnection = async (): Promise<boolean> => {
   if (!supabase) return false
   try {
-    const { error } = await supabase.from('workspaces').select('id').limit(1)
+    const { error } = await supabase.from('approvals').select('id').limit(1)
     return !error
   } catch {
     return false
