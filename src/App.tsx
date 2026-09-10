@@ -7,6 +7,8 @@ import Signup from './pages/Signup';
 import AcceptInvite from './pages/AcceptInvite';
 import TeamManagement from './pages/admin/TeamManagement';
 import AuditLogs from './pages/admin/AuditLogs';
+import WorkspaceSettings from './pages/admin/WorkspaceSettings';
+import RoleEditor from './pages/admin/RoleEditor';
 
 function App() {
   const { currentPage, setCurrentPage } = useStore();
@@ -26,6 +28,8 @@ function App() {
   // Admin pages
   if (hash === 'team-management') return <TeamManagement />;
   if (hash === 'audit-logs') return <AuditLogs />;
+  if (hash === 'workspace-settings') return <WorkspaceSettings />;
+  if (hash === 'role-editor') return <RoleEditor />;
 
   // Sync URL hash with current page (on first load and hash change)
   useEffect(() => {
