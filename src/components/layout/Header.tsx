@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Settings, Bell, ChevronLeft, Zap, Menu, X } from 'lucide-react';
 import { Button, Badge } from '../ui';
 import { useStore } from '../../stores/useStore';
+import { SyncButton } from '../SyncButton';
 
 export const Header: React.FC = () => {
   const {
@@ -121,6 +122,9 @@ export const Header: React.FC = () => {
             </>
           )}
         </div>
+
+        {/* Sync Button */}
+        <SyncButton compact showStatus={false} />
 
         {/* Settings */}
         <Button variant="ghost" size="sm">
