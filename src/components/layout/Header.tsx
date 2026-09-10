@@ -3,6 +3,7 @@ import { Settings, Bell, ChevronLeft, Zap, Menu, X } from 'lucide-react';
 import { Button, Badge } from '../ui';
 import { useStore } from '../../stores/useStore';
 import { SyncButton } from '../SyncButton';
+import { UserMenu } from '../UserMenu';
 
 export const Header: React.FC = () => {
   const {
@@ -131,10 +132,8 @@ export const Header: React.FC = () => {
           <Settings size={18} />
         </Button>
 
-        {/* User Avatar */}
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-success flex items-center justify-center text-white text-sm font-semibold ml-2">
-          JM
-        </div>
+        {/* User Menu */}
+        <UserMenu />
       </div>
     </header>
   );

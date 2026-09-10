@@ -2,18 +2,30 @@ import { useEffect, useRef } from 'react';
 import { Portfolio, ProjectDashboard, Governance, AgentEvaluation, StrikeSystem, ThresholdSystem, Appeals, FeedbackLoop, Council, PublicExceptions, RegionalAdaptation, HealthMetrics } from './pages';
 import { ToastContainer } from './components/ui';
 import { useStore } from './stores/useStore';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
 
 function App() {
   const { currentPage, setCurrentPage } = useStore();
   const isInitialMount = useRef(true);
 
+  // Check if we're on an auth page based on URL hash
+  const hash = window.location.hash.replace('#', '');
+  const isAuthPage = hash === 'login' || hash === 'signup';
+
+  // Auth pages don't need authentication - render directly
+  if (isAuthPage) {
+    if (hash === 'login') return <Login />;
+    if (hash === 'signup') return <Signup />;
+  }
+
   // Sync URL hash with current page (on first load and hash change)
   useEffect(() => {
     const syncFromHash = () => {
-      const hash = window.location.hash.replace('#', '');
-      if (hash && ['portfolio', 'dashboard', 'governance', 'agent-evaluation', 'strike-system', 'threshold-system', 'appeals', 'feedback-loop', 'council', 'public-exceptions', 'regional-adaptation', 'health-metrics'].includes(hash)) {
-        if (hash !== currentPage) {
-          setCurrentPage(hash as any);
+      const newHash = window.location.hash.replace('#', '');
+      if (newHash && ['portfolio', 'dashboard', 'governance', 'agent-evaluation', 'strike-system', 'threshold-system', 'appeals', 'feedback-loop', 'council', 'public-exceptions', 'regional-adaptation', 'health-metrics'].includes(newHash)) {
+        if (newHash !== currentPage) {
+          setCurrentPage(newHash as any);
         }
       }
     };
