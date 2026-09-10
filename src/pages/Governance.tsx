@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Bell, Clock, AlertTriangle } from 'lucide-react';
 import { useGovernanceStore } from '../stores/useGovernanceStore';
+import { ConnectionStatus } from '../components/SupabaseStatus';
 import {
   FlowDiagram,
   ApprovalQueue,
@@ -29,7 +30,17 @@ export const Governance: React.FC = () => {
     approveSensitiveAction,
     rejectSensitiveAction,
     setShowApprovalModal,
+    loadFromSupabase,
+    subscribeRealtime,
+    unsubscribeRealtime,
   } = useGovernanceStore();
+
+  // Initialize Supabase connection
+  useEffect(() => {
+    loadFromSupabase();
+    subscribeRealtime();
+    return () => unsubscribeRealtime();
+  }, [loadFromSupabase, subscribeRealtime, unsubscribeRealtime]);
 
   const selectedApproval = pendingApprovals.find((a) => a.id === selectedApprovalId);
 
@@ -107,6 +118,9 @@ export const Governance: React.FC = () => {
                 </span>
               </motion.div>
             )}
+
+            {/* Supabase Connection Status */}
+            <ConnectionStatus />
           </div>
         </div>
       </div>
